@@ -113,6 +113,15 @@ def load_settings(path: Path = DEFAULT_CONFIG_PATH) -> Settings:
         raise ConfigError(_describe(exc, path)) from None
 
 
+def _describe(exc: ValidationError, path: Path) -> str:
+    """Summarise validation errors by field and reason, without the input values."""
+    problems = [
+        f"{'.'.join(str(part) for part in error['loc']) or '<root>'}: {error['msg']}"
+        for error in exc.errors(include_input=False, include_url=False)
+    ]
+    return f"Invalid configuration ({path}, GENIE_* overrides): " + "; ".join(problems)
+
+
 def _unknown_overrides() -> list[str]:
     """Names (never values) of GENIE_* variables whose top-level key is not a field.
 
@@ -133,12 +142,3 @@ def get_settings() -> Settings:
     Suitable as a FastAPI dependency. Tests call ``get_settings.cache_clear()``.
     """
     return load_settings()
-
-
-def _describe(exc: ValidationError, path: Path) -> str:
-    """Summarise validation errors by field and reason, without the input values."""
-    problems = [
-        f"{'.'.join(str(part) for part in error['loc']) or '<root>'}: {error['msg']}"
-        for error in exc.errors(include_input=False, include_url=False)
-    ]
-    return f"Invalid configuration ({path}, GENIE_* overrides): " + "; ".join(problems)
