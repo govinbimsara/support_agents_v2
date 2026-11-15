@@ -19,9 +19,9 @@ pytestmark = pytest.mark.unit
 
 @pytest.fixture(autouse=True)
 def _clean_genie_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """Keep GENIE_* variables from the developer's shell out of the tests."""
+    """Keep GENIE_* variables (any case) from the developer's shell out of the tests."""
     for name in list(os.environ):
-        if name.startswith("GENIE_"):
+        if name.upper().startswith("GENIE_"):
             monkeypatch.delenv(name)
     get_settings.cache_clear()
     yield
@@ -146,6 +146,28 @@ def test_sdd18_unknown_genie_env_var_raises_config_error(
 
     message = str(excinfo.value)
     assert unknown_var in message
+    assert "SK-NOT-A-REAL-SECRET-123" not in message.upper()
+
+
+def test_sdd18_lowercase_env_var_name_overrides_yaml(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """pydantic-settings matches names case-insensitively; the unknown-name check must agree."""
+    monkeypatch.setenv("genie_log_level", "DEBUG")
+
+    assert load_settings(write_yaml(tmp_path, VALID_YAML)).log_level == "DEBUG"
+
+
+def test_sdd18_lowercase_unknown_env_var_raises_config_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("genie_loglevel", "sk-not-a-real-secret-123")
+
+    with pytest.raises(ConfigError) as excinfo:
+        load_settings(write_yaml(tmp_path, VALID_YAML))
+
+    message = str(excinfo.value)
+    assert "genie_loglevel" in message
     assert "SK-NOT-A-REAL-SECRET-123" not in message.upper()
 
 
