@@ -92,6 +92,12 @@ def load_settings(path: Path = DEFAULT_CONFIG_PATH) -> Settings:
         raise ConfigError(f"Config file is not valid YAML: {path}") from exc
     if not isinstance(data, dict):
         raise ConfigError(f"Config file must contain a YAML mapping at the top level: {path}")
+    # Keys become kwargs: a "_" key would set a pydantic-settings runtime option
+    # (e.g. _env_prefix) instead of failing as an unknown field.
+    bad_keys = [key for key in data if not isinstance(key, str) or key.startswith("_")]
+    if bad_keys:
+        names = ", ".join(repr(str(key)) for key in bad_keys)
+        raise ConfigError(f"Config keys must be field names, not {names}: {path}")
 
     try:
         return Settings(**data)

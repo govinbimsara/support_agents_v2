@@ -98,6 +98,29 @@ def test_sdd18_invalid_yaml_value_raises_config_error(
         load_settings(write_yaml(tmp_path, yaml_text))
 
 
+@pytest.mark.parametrize(
+    ("bad_key_line", "named_key"),
+    [
+        ('_env_prefix: "sk-not-a-real-secret-123"\n', "_env_prefix"),
+        ('_cli_parse_args: "sk-not-a-real-secret-123"\n', "_cli_parse_args"),
+        ('1: "sk-not-a-real-secret-123"\n', "1"),
+    ],
+    ids=["underscore-env-prefix", "underscore-cli-parse-args", "non-string-key"],
+)
+def test_sdd18_yaml_key_that_is_not_a_field_name_raises_config_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, bad_key_line: str, named_key: str
+) -> None:
+    """Keys go to pydantic-settings as kwargs; "_"-keys would reconfigure the loader."""
+    monkeypatch.setenv("LOG_LEVEL", "DEBUG")  # must never apply, whatever the YAML says
+
+    with pytest.raises(ConfigError) as excinfo:
+        load_settings(write_yaml(tmp_path, VALID_YAML + bad_key_line))
+
+    message = str(excinfo.value)
+    assert f"'{named_key}'" in message
+    assert "SK-NOT-A-REAL-SECRET-123" not in message.upper()
+
+
 def test_sdd18_invalid_env_override_raises_config_error(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
