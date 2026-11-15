@@ -20,8 +20,14 @@ chat API (FastAPI, Railway SG) | voice worker (ADK LiveKitRunner, LiveKit Cloud)
 - Never echo environment variables or print secrets. If a credential is missing or wrong, tell the user which variable name to fix and stop.
 - Never commit secrets. Config loads from environment; `.env` is git-ignored and denied in `.claude/settings.json`.
 
-## Commands (fill in as they come to exist)
-`uv sync` | `uv run ruff check . && uv run ruff format --check .` | `uv run mypy app/sessions app/tools app/guardrails app/kb` | `uv run pytest -m unit` | `uv run pytest -m integration` | run chat API | run worker locally
+## Commands
+- Install: `uv sync` (Python 3.14, pinned in `.python-version`)
+- Lint + format: `uv run ruff check . && uv run ruff format --check .` (fix: `uv run ruff check --fix . && uv run ruff format .`)
+- Types (CI scope): `uv run mypy app/sessions app/tools app/guardrails app/kb`
+- Unit tests: `uv run pytest -m unit`
+- Integration tests: `uv run pytest -m integration` (needs a Neon branch; exits 5 while there are none)
+- Run chat API / voice worker: added with the API and voice slices
+- Config overrides: `GENIE_<KEY>=value`, nested `GENIE_<SECTION>__<KEY>` (see `app/config/loader.py`)
 
 ## Workflow
 - One requirement group per slice: `/spec` -> `/plan-tasks` -> `/build` (one task, then stop) -> `/test` -> `/code-review` -> PR. Details in `.claude/rules/workflow.md`.
