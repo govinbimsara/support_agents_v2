@@ -1,0 +1,6 @@
+title = "genie-poc gitleaks config"
+[extend]
+useDefault = true
+[allowlist]
+description = "placeholders and docs"
+paths = ['''\.env\.example$''', '''docs/.*\.md$''']

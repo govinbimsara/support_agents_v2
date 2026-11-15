@@ -1,0 +1,31 @@
+# secrets
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+CLAUDE.local.md
+.claude/settings.local.json
+# python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+# node / front end
+node_modules/
+.next/
+# spec documents are kept local (public repo; company-specific detail)
+docs/source-docs/
+docs/originals/
+
+# misc
+.DS_Store
+*.log
+tmp/
