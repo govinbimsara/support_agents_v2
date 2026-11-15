@@ -1,0 +1,117 @@
+"""Typed configuration loader (SDD 18 Configuration Reference).
+
+All tunables live in ``app/config/config.yaml``. Each environment (dev, demo, prod)
+overrides values with environment variables named ``GENIE_<KEY>``; nested keys use a
+double underscore, e.g. ``GENIE_MODELS__LIVE``. The ``GENIE_`` prefix keeps our
+variables apart from generic platform ones such as ``ENVIRONMENT``.
+
+Precedence, highest first: environment variable > config.yaml. The loader never reads
+``.env`` files; the deployment platform (or the developer's shell) sets the environment.
+
+Nothing is read at import time. Call :func:`load_settings` (explicit path, for tests and
+scripts) or :func:`get_settings` (cached, for the app).
+"""
+
+from functools import lru_cache
+from pathlib import Path
+from typing import Any, Literal
+
+import yaml
+from pydantic import Field, ValidationError, field_validator
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
+
+DEFAULT_CONFIG_PATH = Path(__file__).with_name("config.yaml")
+
+Environment = Literal["dev", "demo", "prod"]
+LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+
+
+class ConfigError(Exception):
+    """Configuration could not be loaded or is invalid.
+
+    Messages name the file or field at fault but never include the rejected value,
+    because a mistaken environment variable could hold a secret.
+    """
+
+
+class Settings(BaseSettings):
+    """Validated application settings. Immutable once loaded."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="GENIE_",
+        env_nested_delimiter="__",
+        extra="forbid",
+        frozen=True,
+    )
+
+    app_name: str = Field(min_length=1)
+    environment: Environment
+    log_level: LogLevel
+
+    @field_validator("log_level", mode="before")
+    @classmethod
+    def _upper_case_log_level(cls, value: Any) -> Any:
+        return value.upper() if isinstance(value, str) else value
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        # load_settings() passes the YAML values as init kwargs; listing env_settings
+        # first makes GENIE_* variables win over them. The dotenv and secrets-dir
+        # sources are left out on purpose.
+        return env_settings, init_settings
+
+
+def load_settings(path: Path = DEFAULT_CONFIG_PATH) -> Settings:
+    """Load config.yaml from ``path`` and apply GENIE_* environment overrides.
+
+    Raises:
+        ConfigError: the file is missing or unreadable, is not a YAML mapping, or a
+            value (from the file or an override) fails validation.
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        raise ConfigError(f"Config file not found: {path}") from exc
+    except OSError as exc:
+        raise ConfigError(f"Config file could not be read: {path}") from exc
+
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        raise ConfigError(f"Config file is not valid YAML: {path}") from exc
+    if not isinstance(data, dict):
+        raise ConfigError(f"Config file must contain a YAML mapping at the top level: {path}")
+
+    try:
+        return Settings(**data)
+    except ValidationError as exc:
+        raise ConfigError(_describe(exc, path)) from None
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    """Return the app's settings, loaded once from the shipped config.yaml.
+
+    Suitable as a FastAPI dependency. Tests call ``get_settings.cache_clear()``.
+    """
+    return load_settings()
+
+
+def _describe(exc: ValidationError, path: Path) -> str:
+    """Summarise validation errors by field and reason, without the input values."""
+    problems = [
+        f"{'.'.join(str(part) for part in error['loc']) or '<root>'}: {error['msg']}"
+        for error in exc.errors(include_input=False, include_url=False)
+    ]
+    return f"Invalid configuration ({path}, GENIE_* overrides): " + "; ".join(problems)
