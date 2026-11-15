@@ -12,6 +12,7 @@ Nothing is read at import time. Call :func:`load_settings` (explicit path, for t
 scripts) or :func:`get_settings` (cached, for the app).
 """
 
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
@@ -25,6 +26,7 @@ from pydantic_settings import (
 )
 
 DEFAULT_CONFIG_PATH = Path(__file__).with_name("config.yaml")
+ENV_PREFIX = "GENIE_"
 
 Environment = Literal["dev", "demo", "prod"]
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
@@ -42,7 +44,7 @@ class Settings(BaseSettings):
     """Validated application settings. Immutable once loaded."""
 
     model_config = SettingsConfigDict(
-        env_prefix="GENIE_",
+        env_prefix=ENV_PREFIX,
         env_nested_delimiter="__",
         extra="forbid",
         frozen=True,
@@ -99,10 +101,29 @@ def load_settings(path: Path = DEFAULT_CONFIG_PATH) -> Settings:
         names = ", ".join(repr(str(key)) for key in bad_keys)
         raise ConfigError(f"Config keys must be field names, not {names}: {path}")
 
+    unknown_vars = _unknown_overrides()
+    if unknown_vars:
+        raise ConfigError(
+            "Unknown environment variables (no matching config key): " + ", ".join(unknown_vars)
+        )
+
     try:
         return Settings(**data)
     except ValidationError as exc:
         raise ConfigError(_describe(exc, path)) from None
+
+
+def _unknown_overrides() -> list[str]:
+    """Names (never values) of GENIE_* variables whose top-level key is not a field.
+
+    pydantic-settings ignores such variables, so a typo would silently keep the YAML value.
+    """
+    return sorted(
+        name
+        for name in os.environ
+        if name.upper().startswith(ENV_PREFIX)
+        and name[len(ENV_PREFIX) :].split("__")[0].lower() not in Settings.model_fields
+    )
 
 
 @lru_cache(maxsize=1)

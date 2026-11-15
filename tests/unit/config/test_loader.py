@@ -130,6 +130,25 @@ def test_sdd18_invalid_env_override_raises_config_error(
         load_settings(write_yaml(tmp_path, VALID_YAML))
 
 
+@pytest.mark.parametrize(
+    "unknown_var",
+    ["GENIE_LOGLEVEL", "GENIE_MODELS__LIVE"],
+    ids=["typo", "unknown-section"],
+)
+def test_sdd18_unknown_genie_env_var_raises_config_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, unknown_var: str
+) -> None:
+    """A mistyped override must fail loudly, like a mistyped YAML key, not be ignored."""
+    monkeypatch.setenv(unknown_var, "sk-not-a-real-secret-123")
+
+    with pytest.raises(ConfigError) as excinfo:
+        load_settings(write_yaml(tmp_path, VALID_YAML))
+
+    message = str(excinfo.value)
+    assert unknown_var in message
+    assert "SK-NOT-A-REAL-SECRET-123" not in message.upper()
+
+
 def test_sdd18_error_message_does_not_echo_rejected_value(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
