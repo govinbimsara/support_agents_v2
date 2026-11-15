@@ -1,0 +1,8 @@
+# Application tunables (SDD 18 Configuration Reference). Values here are defaults.
+# Each environment overrides a key with an environment variable named GENIE_<KEY>,
+# e.g. GENIE_LOG_LEVEL=DEBUG; nested keys use "__", e.g. GENIE_MODELS__LIVE.
+# NEVER put secrets in this file. Secrets come only from the environment.
+
+app_name: genie_business_support
+environment: dev # dev | demo | prod
+log_level: INFO # DEBUG | INFO | WARNING | ERROR | CRITICAL
