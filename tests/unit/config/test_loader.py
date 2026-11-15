@@ -5,6 +5,7 @@ overrides values with environment variables (prefix GENIE_).
 """
 
 import os
+import traceback
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -120,9 +121,29 @@ def test_sdd18_error_message_does_not_echo_rejected_value(
     assert "log_level" in str(excinfo.value)
 
 
+def test_sdd18_traceback_does_not_echo_rejected_value(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """logger.exception() prints the whole chain; a chained ValidationError would leak."""
+    rejected = "sk-not-a-real-secret-123"
+    monkeypatch.setenv("GENIE_LOG_LEVEL", rejected)
+
+    with pytest.raises(ConfigError) as excinfo:
+        load_settings(write_yaml(tmp_path, VALID_YAML))
+
+    full_traceback = "".join(traceback.format_exception(excinfo.value))
+    assert rejected.upper() not in full_traceback.upper()
+
+
 def test_sdd18_missing_file_raises_config_error(tmp_path: Path) -> None:
     with pytest.raises(ConfigError, match="not found"):
         load_settings(tmp_path / "missing.yaml")
+
+
+def test_sdd18_unreadable_path_raises_config_error(tmp_path: Path) -> None:
+    """A directory (or a file without read permission) is reported, not raised raw."""
+    with pytest.raises(ConfigError, match="could not be read"):
+        load_settings(tmp_path)
 
 
 @pytest.mark.parametrize(
