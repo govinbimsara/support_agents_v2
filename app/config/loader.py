@@ -140,6 +140,11 @@ def _unknown_overrides() -> list[str]:
 MIGRATION_URL_VAR = "DATABASE_URL_DIRECT"
 MIGRATION_DRIVER = "postgresql+psycopg"
 _POSTGRES_BACKENDS = {"postgresql", "postgres"}
+_MAX_PORT = 65535
+# make_url raises ArgumentError for a malformed URL and ValueError for a non-numeric port.
+# A named tuple keeps this stable under both the project's ruff and the older pre-commit
+# ruff, which disagree on the Python 3.14 form ``except A, B:``.
+_URL_PARSE_ERRORS = (ArgumentError, ValueError)
 
 
 class MigrationSettings(BaseSettings):
@@ -185,10 +190,12 @@ def load_migration_settings() -> MigrationSettings:
         raise ConfigError(f"{MIGRATION_URL_VAR} is empty")
     try:
         url = make_url(raw)
-    except ArgumentError:
+    except _URL_PARSE_ERRORS:
         raise ConfigError(f"{MIGRATION_URL_VAR} is not a valid database URL") from None
     if url.drivername.split("+")[0] not in _POSTGRES_BACKENDS:
         raise ConfigError(f"{MIGRATION_URL_VAR} must be a PostgreSQL URL (postgresql://...)")
+    if url.port is not None and not 1 <= url.port <= _MAX_PORT:
+        raise ConfigError(f"{MIGRATION_URL_VAR} has a port outside 1-{_MAX_PORT}")
     if "-pooler" in (url.host or ""):
         raise ConfigError(
             f"{MIGRATION_URL_VAR} points at a pooled endpoint; migrations must use the "

@@ -59,8 +59,21 @@ def test_nfr_rel_04_url_and_settings_hide_the_password(monkeypatch: pytest.Monke
         (f"not a url {FAKE_PASSWORD}", "unparsable"),
         (f"mysql://u:{FAKE_PASSWORD}@db.example/x", "wrong-scheme"),
         (f"postgresql://u:{FAKE_PASSWORD}@ep-a-b-123456-pooler.neon.tech/x", "pooler"),
+        (f"postgresql://u:{FAKE_PASSWORD}@ep-x.neon.tech:abc/db", "non-numeric-port"),
+        (f"postgresql://u:{FAKE_PASSWORD}@ep-x.neon.tech:99999999/db", "port-too-large"),
+        (f"postgresql://u:{FAKE_PASSWORD}@ep-x.neon.tech:0/db", "port-zero"),
     ],
-    ids=["missing", "empty", "blank", "unparsable", "wrong-scheme", "pooler-endpoint"],
+    ids=[
+        "missing",
+        "empty",
+        "blank",
+        "unparsable",
+        "wrong-scheme",
+        "pooler-endpoint",
+        "non-numeric-port",
+        "port-too-large",
+        "port-zero",
+    ],
 )
 def test_nfr_rel_04_bad_value_raises_config_error_naming_only_the_variable(
     monkeypatch: pytest.MonkeyPatch, value: str | None, reason: str
