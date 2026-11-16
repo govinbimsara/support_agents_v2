@@ -27,6 +27,7 @@ chat API (FastAPI, Railway SG) | voice worker (ADK LiveKitRunner, LiveKit Cloud)
 - Unit tests: `uv run pytest -m unit`
 - Integration tests: `uv run pytest -m integration` (needs a Neon branch; exits 5 while there are none)
 - Run chat API: `uv run uvicorn app.api.main:app --reload` (health: `/healthz`, `/readyz`)
+- Migrate (Alembic, ADR-0014): `uv run alembic upgrade head`. Reads `DATABASE_URL_DIRECT` (the direct, non-pooled Neon endpoint) from your shell environment only; never put it in a file. Preview the SQL without connecting: `uv run alembic upgrade head --sql`. New revision: `uv run alembic revision -m "..."` (hand-written; `--autogenerate` output is only a draft to review). `adk` schema is ignored by Alembic. Only run against a Neon branch, never `main`, until told otherwise.
 - Run voice worker: added with the voice slice
 - Config overrides: `GENIE_<KEY>=value`, nested `GENIE_<SECTION>__<KEY>` (see `app/config/loader.py`)
 

@@ -18,12 +18,14 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import Field, ValidationError, field_validator
+from pydantic import Field, SecretStr, ValidationError, field_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
     SettingsConfigDict,
 )
+from sqlalchemy import URL, make_url
+from sqlalchemy.exc import ArgumentError
 
 DEFAULT_CONFIG_PATH = Path(__file__).with_name("config.yaml")
 ENV_PREFIX = "GENIE_"
@@ -132,6 +134,77 @@ def _unknown_overrides() -> list[str]:
         for name in os.environ
         if name.upper().startswith(ENV_PREFIX)
         and name[len(ENV_PREFIX) :].split("__")[0].lower() not in Settings.model_fields
+    )
+
+
+MIGRATION_URL_VAR = "DATABASE_URL_DIRECT"
+MIGRATION_DRIVER = "postgresql+psycopg"
+_POSTGRES_BACKENDS = {"postgresql", "postgres"}
+
+
+class MigrationSettings(BaseSettings):
+    """Settings for Alembic only (ADR-0014, NFR-REL-04). Environment variables only.
+
+    Kept apart from :class:`Settings` so the chat API and voice worker never load the
+    direct (non-pooled) database credential. It is not in ``config.yaml`` and no dotenv
+    or secrets-dir source is configured: the deployment platform or the developer's
+    shell sets ``DATABASE_URL_DIRECT``. The value is a ``SecretStr``, so ``repr`` hides it.
+    """
+
+    model_config = SettingsConfigDict(extra="forbid", frozen=True)
+
+    database_url_direct: SecretStr = Field(validation_alias=MIGRATION_URL_VAR)
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return (env_settings,)
+
+
+def load_migration_settings() -> MigrationSettings:
+    """Read and check ``DATABASE_URL_DIRECT`` from the environment.
+
+    Raises:
+        ConfigError: the variable is missing, empty, not a PostgreSQL URL, or points at a
+            pooled Neon endpoint. Messages name the variable, never its value, and the
+            underlying exception is suppressed because SQLAlchemy and pydantic echo input.
+    """
+    try:
+        settings = MigrationSettings()
+    except ValidationError:
+        raise ConfigError(f"{MIGRATION_URL_VAR} is not set") from None
+
+    raw = settings.database_url_direct.get_secret_value().strip()
+    if not raw:
+        raise ConfigError(f"{MIGRATION_URL_VAR} is empty")
+    try:
+        url = make_url(raw)
+    except ArgumentError:
+        raise ConfigError(f"{MIGRATION_URL_VAR} is not a valid database URL") from None
+    if url.drivername.split("+")[0] not in _POSTGRES_BACKENDS:
+        raise ConfigError(f"{MIGRATION_URL_VAR} must be a PostgreSQL URL (postgresql://...)")
+    if "-pooler" in (url.host or ""):
+        raise ConfigError(
+            f"{MIGRATION_URL_VAR} points at a pooled endpoint; migrations must use the "
+            "direct (non-pooled) Neon endpoint (NFR-REL-04)"
+        )
+    return settings
+
+
+def migration_url(settings: MigrationSettings) -> URL:
+    """Build the SQLAlchemy URL for Alembic, using the synchronous psycopg driver.
+
+    The secret is unwrapped here and nowhere else. ``URL.__repr__``/``__str__`` mask the
+    password, but never call ``render_as_string(hide_password=False)`` on the result.
+    """
+    return make_url(settings.database_url_direct.get_secret_value().strip()).set(
+        drivername=MIGRATION_DRIVER
     )
 
 
