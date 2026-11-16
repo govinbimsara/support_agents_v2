@@ -6,6 +6,7 @@ Strings the guard detects are assembled from pieces so this file never trips the
 
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -312,6 +313,58 @@ def test_new_exception_row_is_flagged(repo: Path) -> None:
 def test_dropping_an_exception_is_silent(repo: Path) -> None:
     write(repo, "CONSTRAINTS.md", BASE_CONSTRAINTS.replace("| W1 | some-rule | legacy |\n", ""))
     assert run_guard("main", repo) == []
+
+
+@pytest.mark.parametrize(
+    ("fails", "message"),
+    [
+        (lambda a: a[0] == "diff" and "--no-index" not in a, "could not diff against"),
+        (lambda a: a[0] == "ls-files", "could not list untracked"),
+        (lambda a: a[0] == "diff" and "--no-index" in a, "could not diff untracked"),
+    ],
+    ids=["tracked-diff", "untracked-listing", "untracked-diff"],
+)
+def test_a_failing_git_call_cannot_run_rather_than_read_as_clean(
+    repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    fails: Callable[[list[str]], bool],
+    message: str,
+) -> None:
+    write(repo, "app/new.py", "x = 1\n")  # untracked, so the per-file diff runs too
+    real_git = floor_guard._git
+
+    def flaky(args: list[str], cwd: Path, *, diff_exit: bool = False) -> str | None:
+        return None if fails(args) else real_git(args, cwd, diff_exit=diff_exit)
+
+    monkeypatch.setattr(floor_guard, "_git", flaky)
+    with pytest.raises(GuardError, match=message):
+        run_guard("main", repo)
+    assert floor_guard.main(["--base", "main"], cwd=repo) == 2
+    assert "cannot run" in capsys.readouterr().err
+
+
+def test_editing_a_rule_without_changing_its_number_is_silent(repo: Path) -> None:
+    write(repo, "CONSTRAINTS.md", BASE_CONSTRAINTS.replace("pytest-cov", "coverage.py"))
+    assert run_guard("main", repo) == []
+
+
+def test_deleting_a_non_test_file_is_silent(repo: Path) -> None:
+    (repo / "app/mod.py").unlink()
+    assert run_guard("main", repo) == []
+
+
+def test_unreadable_constraints_file_is_still_checked(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # If the sections cannot be read, nothing is exempt: a loosened bar must still be found.
+    write(repo, "CONSTRAINTS.md", BASE_CONSTRAINTS.replace(">= 80%", ">= 70%"))
+
+    def unreadable(self: Path, *args: object, **kwargs: object) -> str:
+        raise OSError("unreadable")
+
+    monkeypatch.setattr(Path, "read_text", unreadable)
+    assert rules(repo) == {"threshold-loosened"}
 
 
 def test_unknown_base_cannot_run(repo: Path) -> None:
