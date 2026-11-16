@@ -35,6 +35,16 @@ def test_nfr_rel_04_loads_direct_url_from_environment(monkeypatch: pytest.Monkey
     assert url.query == {"sslmode": "require"}
 
 
+@pytest.mark.parametrize("port", [1, 5432, 65535], ids=["lowest", "default", "highest"])
+def test_nfr_rel_04_valid_port_range_is_accepted_inclusive(
+    monkeypatch: pytest.MonkeyPatch, port: int
+) -> None:
+    """Guards the range check against off-by-one errors at both ends."""
+    monkeypatch.setenv(VAR, f"postgresql://u:{FAKE_PASSWORD}@ep-x.neon.tech:{port}/db")
+
+    assert migration_url(load_migration_settings()).port == port
+
+
 def test_nfr_rel_04_postgres_scheme_alias_is_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(VAR, DIRECT_URL.replace("postgresql://", "postgres://", 1))
 
