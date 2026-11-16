@@ -165,6 +165,23 @@ def test_moved_assertion_is_not_flagged(repo: Path) -> None:
     assert run_guard("main", repo) == []
 
 
+def test_renamed_test_file_with_edits_is_not_flagged(repo: Path) -> None:
+    # A move is not a loss: the assertions follow the file to its new path.
+    git(repo, "mv", "tests/test_a.py", "tests/test_renamed.py")
+    write(
+        repo,
+        "tests/test_renamed.py",
+        "def test_a():\n    assert 1 == 1\n    assert 2 == 2\n    assert 3 == 3\n",
+    )
+    assert run_guard("main", repo) == []
+
+
+def test_renamed_test_file_that_loses_an_assertion_is_flagged(repo: Path) -> None:
+    git(repo, "mv", "tests/test_a.py", "tests/test_renamed.py")
+    write(repo, "tests/test_renamed.py", "def test_a():\n    assert 1 == 1\n")
+    assert rules(repo) == {"assertion-removed"}
+
+
 def test_staged_changes_are_seen(repo: Path) -> None:
     write(repo, "app/new.py", f"x = 1  {NOQA}\n")
     git(repo, "add", "app/new.py")
