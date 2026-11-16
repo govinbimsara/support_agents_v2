@@ -238,6 +238,60 @@ def test_maximum_threshold_raised_is_loosened(repo: Path) -> None:
     assert run_guard("main", repo) == []
 
 
+MEASURED = """
+## Measured, not yet enforced
+
+| Metric | Today |
+|---|---|
+| Project coverage | 98% |
+| Unit test count | 151 |
+
+## Next section
+
+- Floor note: kept
+"""
+
+
+def test_refreshing_a_measured_number_is_silent(repo: Path) -> None:
+    write(repo, "CONSTRAINTS.md", BASE_CONSTRAINTS + MEASURED)
+    git(repo, "commit", "-q", "-am", "measured table")
+    write(
+        repo,
+        "CONSTRAINTS.md",
+        (BASE_CONSTRAINTS + MEASURED).replace("98%", "97%").replace("151", "160"),
+    )
+    assert run_guard("main", repo) == []
+
+
+def test_dropping_a_measured_row_is_silent(repo: Path) -> None:
+    write(repo, "CONSTRAINTS.md", BASE_CONSTRAINTS + MEASURED)
+    git(repo, "commit", "-q", "-am", "measured table")
+    write(
+        repo,
+        "CONSTRAINTS.md",
+        (BASE_CONSTRAINTS + MEASURED).replace("| Unit test count | 151 |\n", ""),
+    )
+    assert run_guard("main", repo) == []
+
+
+def test_numbers_after_the_measured_section_are_still_checked(repo: Path) -> None:
+    base = (BASE_CONSTRAINTS + MEASURED).replace("- Floor note: kept", "- Floor note: limit 3")
+    write(repo, "CONSTRAINTS.md", base)
+    git(repo, "commit", "-q", "-am", "numbered rule")
+    write(repo, "CONSTRAINTS.md", base.replace("limit 3", "limit 9"))
+    assert rules(repo) == {"threshold-changed"}
+
+
+def test_moving_an_enforced_rule_into_measured_is_flagged(repo: Path) -> None:
+    moved = BASE_CONSTRAINTS.replace("| Coverage (changed lines) | pytest-cov | >= 80% |\n", "")
+    write(
+        repo,
+        "CONSTRAINTS.md",
+        moved + MEASURED.replace("| Unit test count | 151 |", "| Coverage (changed lines) | 10% |"),
+    )
+    assert rules(repo) == {"rule-removed"}
+
+
 def test_removed_rule_is_flagged(repo: Path) -> None:
     write(repo, "CONSTRAINTS.md", BASE_CONSTRAINTS.replace("| Lint | ruff | zero errors |\n", ""))
     assert rules(repo) == {"rule-removed"}

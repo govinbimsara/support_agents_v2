@@ -16,6 +16,7 @@ base of ``--base`` and HEAD, and reports every move that lowers the quality bar:
 * new-exception: a new row in the CONSTRAINTS.md exceptions table.
 
 Tightening is silent; only moves that loosen the bar are reported.
+Rows under a "Measured" heading in CONSTRAINTS.md are readings, not a bar, and are ignored.
 
 Exit codes: 0 clean, 1 at least one violation, 2 the guard could not run (no git work tree,
 no merge base). A 2 must never be read as a 0.
@@ -33,7 +34,8 @@ import re
 import subprocess
 import sys
 from collections import defaultdict
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 EXIT_CLEAN = 0
@@ -53,6 +55,7 @@ class Line:
     text: str
     number: int
     prev: str | None = None  # previous added line in the same hunk (added lines only)
+    informational: bool = False  # CONSTRAINTS.md line under a "Measured" heading, not a bar
 
 
 @dataclass(frozen=True)
@@ -87,10 +90,10 @@ def _is_env_file(path: str) -> bool:
     return name.startswith(".env") and name != ".env.example"
 
 
-def collect_diff(base: str, cwd: Path) -> str:
-    """Unified diff of merge-base..working tree, plus untracked files (git diff cannot see them).
+def resolve_base(base: str, cwd: Path) -> tuple[Path, str]:
+    """The repository root and the merge base of ``base`` and HEAD.
 
-    Raises GuardError rather than returning an empty diff: "could not diff" is not "clean".
+    Raises GuardError rather than guessing: "could not resolve" is not "clean".
     """
     top = _git(["rev-parse", "--show-toplevel"], cwd)
     if not top or not top.strip():
@@ -100,8 +103,15 @@ def collect_diff(base: str, cwd: Path) -> str:
     merge_base = _git(["merge-base", base, "HEAD"], root)
     if not merge_base or not merge_base.strip():
         raise GuardError(f"no merge base against {base} (shallow clone or unknown ref?)")
+    return root, merge_base.strip()
 
-    tracked = _git(["diff", "--unified=0", merge_base.strip(), "--"], root)
+
+def collect_diff(root: Path, merge_base: str) -> str:
+    """Unified diff of merge-base..working tree, plus untracked files (git diff cannot see them).
+
+    Raises GuardError rather than returning an empty diff: "could not diff" is not "clean".
+    """
+    tracked = _git(["diff", "--unified=0", merge_base, "--"], root)
     if tracked is None:
         raise GuardError("could not diff against the merge base")
 
@@ -168,6 +178,46 @@ def parse_diff(diff: str) -> tuple[list[Line], list[Line], list[str]]:
             removed.append(Line(file, raw[1:], old_no))
             old_no += 1
     return added, removed, deleted
+
+
+# --- CONSTRAINTS.md sections ------------------------------------------------------------
+
+_HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
+_INFORMATIONAL_HEADING = re.compile(r"measured\b", re.IGNORECASE)
+
+
+def informational_lines(text: str) -> set[int]:
+    """1-based line numbers under a "Measured" heading (until a heading of the same or a
+    higher level). Those tables report numbers the project has; they are not a bar, so
+    refreshing one must not read as loosening a threshold.
+    """
+    lines: set[int] = set()
+    level: int | None = None
+    for number, line in enumerate(text.splitlines(), start=1):
+        heading = _HEADING.match(line)
+        if heading:
+            depth = len(heading[1])
+            if level is not None and depth <= level:
+                level = None
+            if level is None and _INFORMATIONAL_HEADING.match(heading[2]):
+                level = depth
+        if level is not None:
+            lines.add(number)
+    return lines
+
+
+def _mark_informational(lines: list[Line], read: Callable[[str], str]) -> list[Line]:
+    """Flag the CONSTRAINTS.md lines that sit in a Measured section of the file ``read`` returns."""
+    cache: dict[str, set[int]] = {}
+    marked: list[Line] = []
+    for line in lines:
+        if _is_constraints(line.file):
+            if line.file not in cache:
+                cache[line.file] = informational_lines(read(line.file))
+            if line.number in cache[line.file]:
+                line = replace(line, informational=True)
+        marked.append(line)
+    return marked
 
 
 # --- Source rules (Python patterns; the diff plumbing above is stack-agnostic) -----------
@@ -292,8 +342,10 @@ def _verdict(old: str, new: str) -> str | None:
 
 def _constraints_findings(added: list[Line], removed: list[Line]) -> list[Finding]:
     findings: list[Finding] = []
-    new_rules = [x for x in added if _rule_key(x.text) is not None]
-    for r in (x for x in removed if _rule_key(x.text) is not None):
+    # Informational (Measured) lines are neither a bar nor a way to hide one: a rule moved
+    # into such a section no longer matches here, so it is reported as removed.
+    new_rules = [x for x in added if not x.informational and _rule_key(x.text) is not None]
+    for r in (x for x in removed if not x.informational and _rule_key(x.text) is not None):
         match = next((a for a in new_rules if _rule_key(a.text) == _rule_key(r.text)), None)
         if match is None:
             if not _EXCEPTION_ROW.match(r.text.strip()):  # dropping an exception tightens
@@ -349,7 +401,21 @@ def evaluate(added: list[Line], removed: list[Line], deleted: list[str]) -> list
 
 def run_guard(base: str, cwd: Path) -> list[Finding]:
     """Findings for the diff against ``base``; raises GuardError when the guard cannot run."""
-    return evaluate(*parse_diff(collect_diff(base, cwd)))
+    root, merge_base = resolve_base(base, cwd)
+    added, removed, deleted = parse_diff(collect_diff(root, merge_base))
+
+    def old_text(path: str) -> str:
+        return _git(["show", f"{merge_base}:{path}"], root) or ""
+
+    def new_text(path: str) -> str:
+        try:
+            return (root / path).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return ""
+
+    return evaluate(
+        _mark_informational(added, new_text), _mark_informational(removed, old_text), deleted
+    )
 
 
 def main(argv: list[str] | None = None, cwd: Path | None = None) -> int:

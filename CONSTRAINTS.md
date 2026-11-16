@@ -46,6 +46,8 @@ only; everything else runs in `make check-task`.
 
 ## Measured, not yet enforced
 
+Numbers here are readings, not a bar: the floor guard ignores edits to this section, so refresh them freely. A rule moved in here from "Enforced" is reported as removed.
+
 | Metric | Today (2026-11-17) | Direction |
 |---|---|---|
 | Project-wide coverage (branch, `app/` + `scripts/`) | 98% (`app/` 100%) | Reported in the CI job summary, never blocking. Make it a ratchet (0.5 point tolerance) once the voice worker exists. |
