@@ -50,8 +50,11 @@ markers = [
 # Coverage (CONSTRAINTS.md): changed lines must be >= 80% covered, checked by diff-cover
 # against coverage.xml. Branch coverage so an untested `else` shows up as a miss.
 [tool.coverage.run]
-source = ["app"]
+source = ["app", "scripts"]
 branch = true
+
+[tool.coverage.report]
+exclude_also = ['if __name__ == "__main__":']
 
 [dependency-groups]
 dev = [
