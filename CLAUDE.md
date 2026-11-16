@@ -26,7 +26,8 @@ chat API (FastAPI, Railway SG) | voice worker (ADK LiveKitRunner, LiveKit Cloud)
 - Types (CI scope): `uv run mypy app/sessions app/tools app/guardrails app/kb`
 - Unit tests: `uv run pytest -m unit`
 - Integration tests: `uv run pytest -m integration` (needs a Neon branch; exits 5 while there are none)
-- Run chat API / voice worker: added with the API and voice slices
+- Run chat API: `uv run uvicorn app.api.main:app --reload` (health: `/healthz`, `/readyz`)
+- Run voice worker: added with the voice slice
 - Config overrides: `GENIE_<KEY>=value`, nested `GENIE_<SECTION>__<KEY>` (see `app/config/loader.py`)
 
 ## Workflow
