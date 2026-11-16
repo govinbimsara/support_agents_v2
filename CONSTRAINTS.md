@@ -33,8 +33,10 @@ Checked by `uv run python scripts/floor_guard.py --base origin/main` (task end, 
 | /ops absent from images | absent | CI `images` job: docker build, then `test -e /ops` | CI | NFR-SEC-08. Passes trivially until a Dockerfile exists. |
 | Voice latency (NFR-PRF-*) | per SRS | spike measurements in `docs/spikes/STATUS.md` | manual | Needs real audio and a live worker, so it is not a merge gate. |
 
-Block, not warn: every row above fails the task and CI. Dependency and image checks run in CI
-only; everything else runs in `make check-task`.
+Block, not warn: every row above fails the task and CI, except the three marked "Pending"
+(flow YAML, prompt version header, config loads) and the manual voice-latency row. A pending row
+starts blocking in CI the moment its script exists; until then it checks nothing. Dependency and
+image checks run in CI only; everything else runs in `make check-task`.
 
 ## Where checks run
 
