@@ -24,8 +24,12 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       has_py: ${{ steps.detect.outputs.has_py }}
+    env:
+      # Mirrors CONSTRAINTS.md "Coverage (changed lines)". Edit the file first, then this.
+      CHANGED_LINE_COVERAGE: "80"
     steps:
       - uses: actions/checkout@v7
+        with: { fetch-depth: 0 }   # changed-line coverage and the floor guard need the merge base
       - id: detect
         run: |
           [ -f pyproject.toml ] && echo "has_py=true" >> "$GITHUB_OUTPUT" || echo "has_py=false" >> "$GITHUB_OUTPUT"
@@ -36,12 +40,32 @@ jobs:
       - name: Lint and format check
         if: steps.detect.outputs.has_py == 'true'
         run: uv run ruff check . && uv run ruff format --check .
-      - name: Type check (core modules)
+      - name: Type check (app, migrations, CI gate scripts)
         if: steps.detect.outputs.has_py == 'true'
-        run: uv run mypy app/sessions app/tools app/guardrails app/kb
-      - name: Unit tests
+        run: uv run mypy app migrations scripts
+      - name: Unit tests with coverage
         if: steps.detect.outputs.has_py == 'true'
-        run: uv run pytest -m unit
+        run: uv run pytest -m unit --cov --cov-report=term:skip-covered --cov-report=xml:coverage.xml
+      - name: Project-wide coverage (reported, not blocking)
+        if: steps.detect.outputs.has_py == 'true'
+        run: |
+          {
+            echo "### Project-wide coverage (information only)"
+            uv run coverage report --format=markdown
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Changed-line coverage (CONSTRAINTS.md, blocking)
+        if: steps.detect.outputs.has_py == 'true' && github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}   # via env, never interpolated into the script
+        run: >-
+          uv run diff-cover coverage.xml
+          --compare-branch="origin/$BASE_REF"
+          --fail-under="$CHANGED_LINE_COVERAGE"
+      - name: Floor guard (CONSTRAINTS.md, blocking)
+        if: steps.detect.outputs.has_py == 'true' && github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: uv run python scripts/floor_guard.py --base "origin/$BASE_REF"
       - name: Validate flow YAML
         if: steps.detect.outputs.has_py == 'true' && hashFiles('scripts/validate_flows.py') != ''
         run: uv run python scripts/validate_flows.py
@@ -51,6 +75,36 @@ jobs:
       - name: Config check (dev, demo, prod)
         if: steps.detect.outputs.has_py == 'true' && hashFiles('scripts/check_config.py') != ''
         run: uv run python scripts/check_config.py
+
+  deps-scan:                # CONSTRAINTS.md "Security: dependencies" (nothing at high or above)
+    runs-on: ubuntu-latest
+    env:
+      # To bump: change BOTH values in one reviewed PR. The hash comes from the release's
+      # osv-scanner_SHA256SUMS (linux_amd64 line). A mismatch fails the job, so a changed or
+      # tampered binary can never run silently, and a version bump is visible in review.
+      OSV_VERSION: v2.7.1
+      OSV_SHA256: fb7dab19a8bd9bbe5c3189f09d4b7ee1820c9553a23bac202648a56efd2f6ee8
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install osv-scanner (checksum-pinned)
+        if: hashFiles('uv.lock') != ''
+        run: |
+          curl -fsSL -o osv-scanner \
+            "https://github.com/google/osv-scanner/releases/download/${OSV_VERSION}/osv-scanner_linux_amd64"
+          echo "${OSV_SHA256}  osv-scanner" | sha256sum -c -
+          chmod +x osv-scanner
+      - name: Scan uv.lock and gate on severity
+        if: hashFiles('uv.lock') != ''
+        run: |
+          # osv-scanner exits 1 on ANY finding (handed to the gate below); any other
+          # non-zero exit is a scanner error and must fail the job, not read as clean.
+          rc=0
+          ./osv-scanner scan source -L uv.lock --format json > osv.json || rc=$?
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 1 ]; then
+            echo "::error::osv-scanner failed with exit code $rc"
+            exit 1
+          fi
+          python3 scripts/check_osv.py osv.json
 
   integration:              # SDD 25.3 step 6. Needs repo secrets NEON_API_KEY, NEON_PROJECT_ID
     runs-on: ubuntu-latest
