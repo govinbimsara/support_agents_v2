@@ -196,7 +196,7 @@ def load_migration_settings() -> MigrationSettings:
         raise ConfigError(f"{MIGRATION_URL_VAR} must be a PostgreSQL URL (postgresql://...)")
     if url.port is not None and not 1 <= url.port <= _MAX_PORT:
         raise ConfigError(f"{MIGRATION_URL_VAR} has a port outside 1-{_MAX_PORT}")
-    if "-pooler" in (url.host or ""):
+    if "-pooler" in (url.host or "").lower():  # hostnames are case-insensitive
         raise ConfigError(
             f"{MIGRATION_URL_VAR} points at a pooled endpoint; migrations must use the "
             "direct (non-pooled) Neon endpoint (NFR-REL-04)"
