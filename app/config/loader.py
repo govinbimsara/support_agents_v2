@@ -207,6 +207,8 @@ def load_migration_settings() -> MigrationSettings:
 def migration_url(settings: MigrationSettings) -> URL:
     """Build the SQLAlchemy URL for Alembic, using the synchronous psycopg driver.
 
+    Any driver suffix in the URL (e.g. ``postgresql+asyncpg://``) is rewritten to psycopg.
+
     The secret is unwrapped here and nowhere else. ``URL.__repr__``/``__str__`` mask the
     password, but never call ``render_as_string(hide_password=False)`` on the result.
     """
