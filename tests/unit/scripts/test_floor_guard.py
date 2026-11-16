@@ -103,6 +103,9 @@ def test_ordinary_change_is_clean(repo: Path) -> None:
         (f"x = 1  {NO_COVER}  # but with a reason\n", "silenced-checker"),
         (f"# {OPEN_ITEM} later\n", "unfinished-work"),
         ("raise NotImplemented" + "Error\n", "unfinished-work"),
+        ("raise NotImplemented" + "Error  # x\n", "unfinished-work"),
+        ("raise NotImplemented" + "Error  # abstract hook\n", "unfinished-work"),
+        ("raise NotImplemented" + "Error  # see the spec\n", "unfinished-work"),
         ("try:\n    f()\nexcept ValueError:\n    pass\n", "unfinished-work"),
         ("try:\n    f()\nexcept ValueError: pass\n", "unfinished-work"),
     ],
@@ -119,6 +122,8 @@ def test_added_line_is_flagged(repo: Path, content: str, expected: str) -> None:
         f"x = 1  {TYPE_IGNORE}[misc]  # frozen model asserted at runtime\n",
         f"# {OPEN_ITEM}(FR-TS-07) make this idempotent\n",
         "raise NotImplemented" + "Error  # abstract hook, see ADR-0003\n",
+        "raise NotImplemented" + "Error  # FR-TS-07 lands with the flows slice\n",
+        "raise NotImplemented" + "Error  # NFR-SEC-08\n",
         "try:\n    f()\nexcept ValueError:\n    log()\n    pass\n",
     ],
 )

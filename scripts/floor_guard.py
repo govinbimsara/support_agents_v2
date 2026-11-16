@@ -8,9 +8,9 @@ base of ``--base`` and HEAD, and reports every move that lowers the quality bar:
   coverage / scanner / secret-scan suppression of any kind.
 * test-made-easier: a skip or xfail marker added to a test, a test file deleted, or more
   assertions removed from a test file than were added to it.
-* unfinished-work: a stub that raises NotImplementedError, an exception handler that
-  swallows the error, a bare ``...`` body in app code, or an open-item marker (the to-do
-  or fix-me word) that carries no ticket ID.
+* unfinished-work: a NotImplementedError stub with no requirement or ticket ID in a
+  same-line comment, an exception handler that swallows the error, a bare ``...`` body in
+  app code, or an open-item marker (the to-do or fix-me word) that carries no ticket ID.
 * threshold-loosened / threshold-removed / threshold-changed / rule-removed: a rule in
   CONSTRAINTS.md made weaker or deleted.
 * new-exception: a new row in the CONSTRAINTS.md exceptions table.
@@ -187,7 +187,10 @@ _NEVER = re.compile(
 _SKIP = re.compile(
     r"@pytest\.mark\.(?:skip|skipif|xfail)\b|\bpytest\.(?:skip|xfail)\(|@unittest\.skip"
 )
-_NOT_IMPLEMENTED = re.compile(r"\braise\s+NotImplemented(?:Error)?\b(?!.*#\s*\S)")
+# A requirement or ticket ID such as FR-TS-07, NFR-SEC-08, GTS-12 or ADR-0003.
+_ID = r"\b[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d+\b"
+# Allowed only with a same-line comment that names an ID (like the open-item marker rule).
+_NOT_IMPLEMENTED = re.compile(rf"\braise\s+NotImplemented(?:Error)?\b(?!.*#.*{_ID})")
 _EXCEPT_PASS_INLINE = re.compile(r"\bexcept\b[^#]*:\s*pass\b")
 _EXCEPT_HEAD = re.compile(r"^\s*except\b.*:\s*$")
 _BARE_PASS = re.compile(r"^\s*pass\s*$")

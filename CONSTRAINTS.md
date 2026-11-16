@@ -11,7 +11,7 @@ Checked by `uv run python scripts/floor_guard.py --base origin/main` (task end, 
 
 - No suppression without a reason: a noqa or type-ignore comment needs a second comment on the same line saying why. Coverage, scanner and secret-scan suppressions are never allowed without an exception.
 - No skipped or deleted tests: no skip, skipif or xfail markers, no deleted test files, no net loss of assertions.
-- No stubs shipped as done: no `NotImplementedError`, swallowed exceptions, bare `...` bodies in `app/`, or open-item markers without a ticket or requirement ID.
+- No stubs shipped as done: no `NotImplementedError` without a requirement or ticket ID in a comment on the same line, no swallowed exceptions, no bare `...` bodies in `app/`, no open-item markers without a ticket or requirement ID.
 - No thresholds edited down: a loosened number, a removed rule or a new exception row in this file fails the guard and needs a human decision.
 - No secrets in git: see the Secrets row below.
 - This file is never weakened to make a change pass.
