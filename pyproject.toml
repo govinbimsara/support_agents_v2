@@ -9,12 +9,22 @@ license = "Apache-2.0"
 # pgvector); livekit-agents caps at <3.15 and onnxruntime has no cp315 wheels yet.
 requires-python = ">=3.14,<3.15"
 dependencies = [
+    "alembic>=1.20.1",
     "fastapi>=0.163.1",
+    "psycopg[binary]>=3.3.9",
     "pydantic>=2.14.3",
     "pydantic-settings>=2.16.3",
     "pyyaml>=6.0.3",
+    "sqlalchemy>=2.1.8",
     "uvicorn>=0.54.0",
 ]
+
+# Alembic (ADR-0014). The database URL is deliberately NOT configured here or in
+# alembic.ini: migrations/env.py reads DATABASE_URL_DIRECT from the environment through
+# app.config.load_migration_settings(). alembic.ini holds logging settings only.
+[tool.alembic]
+script_location = "%(here)s/migrations"
+prepend_sys_path = ["."]
 
 [tool.ruff]
 line-length = 100
