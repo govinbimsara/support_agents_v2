@@ -29,3 +29,7 @@ docs/originals/
 .DS_Store
 *.log
 tmp/
+
+# Quality-gate outputs (make check-task / check-full)
+coverage.xml
+osv.json

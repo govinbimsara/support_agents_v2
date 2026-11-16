@@ -47,11 +47,22 @@ markers = [
     "integration: tests against a temporary Neon branch and a test S3 prefix",
 ]
 
+# Coverage (CONSTRAINTS.md): changed lines must be >= 80% covered, checked by diff-cover
+# against coverage.xml. Branch coverage so an untested `else` shows up as a miss.
+[tool.coverage.run]
+source = ["app", "scripts"]
+branch = true
+
+[tool.coverage.report]
+exclude_also = ['if __name__ == "__main__":']
+
 [dependency-groups]
 dev = [
+    "diff-cover>=11.0.2",
     "httpx>=0.28.1",
     "mypy>=2.4.1",
     "pytest>=9.2.0",
+    "pytest-cov>=7.1.0",
     "ruff>=0.17.5",
     "types-pyyaml>=6.0.12.20261113",
 ]

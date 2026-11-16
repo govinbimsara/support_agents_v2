@@ -1,7 +1,10 @@
 # Genie Business Support Agent POC
 
 Chat + voice support agent for Dialog Pay Business merchants (English / Sinhala / Tamil). Solo-built POC; the codebase is handed to a team after the demo, so keep it readable and documented.
-Specs (SRS v0.2, SDD v0.3, Doc 3 behaviour tests, Doc 4 guardrail tests, Doc 5 prompts) live in `docs/source-docs/` as LOCAL, git-ignored markdown copies; never commit them or quote large parts of them in committed files. Decisions: `docs/decisions/`. Spike results: `docs/spikes/STATUS.md`. Quality bar: `CONSTRAINTS.md`.
+Specs (SRS v0.2, SDD v0.3, Doc 3 behaviour tests, Doc 4 guardrail tests, Doc 5 prompts) live in `docs/source-docs/` as LOCAL, git-ignored markdown copies; never commit them or quote large parts of them in committed files. Decisions: `docs/decisions/`. Spike results: `docs/spikes/STATUS.md`.
+
+## Quality bar (read before writing code)
+Read `CONSTRAINTS.md` before writing code. Run `make check-task` before handing work back. Never weaken `CONSTRAINTS.md` (thresholds, rules, tests, suppressions) to make a change pass: fix the code, or add a dated exception with an owner and ask the user. `scripts/floor_guard.py` fails any diff that lowers the bar.
 
 ## Architecture map
 chat API (FastAPI, Railway SG) | voice worker (ADK LiveKitRunner, LiveKit Cloud) | Neon Postgres (ADK sessions + pgvector KB) | AWS S3 | Gemini | Model Armor | Langfuse (OTel)
@@ -23,8 +26,9 @@ chat API (FastAPI, Railway SG) | voice worker (ADK LiveKitRunner, LiveKit Cloud)
 ## Commands
 - Install: `uv sync` (Python 3.14, pinned in `.python-version`)
 - Lint + format: `uv run ruff check . && uv run ruff format --check .` (fix: `uv run ruff check --fix . && uv run ruff format .`)
-- Types (CI scope): `uv run mypy app/sessions app/tools app/guardrails app/kb`
+- Types (CI scope): `uv run mypy app migrations scripts` (strict; includes the sessions, tools, guardrails and kb core)
 - Unit tests: `uv run pytest -m unit`
+- Quality gates (mirror `CONSTRAINTS.md`): `make check-fast` (edit loop: ruff + mypy), `make check-task` (task end: + unit tests, changed-line coverage >= 80%, floor guard), `make check-full` (CI parity: + `osv-scanner` dependency severity gate, git-content-only `gitleaks`; each is skipped with a notice if the tool is not installed)
 - Integration tests: `uv run pytest -m integration` (needs a Neon branch; exits 5 while there are none)
 - Run chat API: `uv run uvicorn app.api.main:app --reload` (health: `/healthz`, `/readyz`)
 - Migrate (Alembic, ADR-0014): `uv run alembic upgrade head`. Reads `DATABASE_URL_DIRECT` (the direct, non-pooled Neon endpoint) from your shell environment only; never put it in a file. Preview the SQL without connecting: `uv run alembic upgrade head --sql`. New revision: `uv run alembic revision -m "..."` (hand-written; `--autogenerate` output is only a draft to review). `adk` schema is ignored by Alembic.
