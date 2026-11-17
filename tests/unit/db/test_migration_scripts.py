@@ -3,7 +3,9 @@
 No database: offline mode renders SQL to a buffer and never reads DATABASE_URL_DIRECT.
 """
 
+import configparser
 import io
+import logging
 import re
 from pathlib import Path
 
@@ -21,6 +23,20 @@ ROOT = Path(__file__).resolve().parents[3]
 def alembic_config() -> Config:
     # No ini file: skips env.py's logging reconfiguration so other tests' logging is untouched.
     return Config(toml_file=str(ROOT / "pyproject.toml"))
+
+
+def _engine_logger_level(ini_text: str) -> int:
+    """Numeric level of the logger whose qualname is ``sqlalchemy.engine``.
+
+    Found by qualname, not by section name, so renaming the section cannot hide it.
+    Interpolation is off because the ini holds ``%(...)s`` log-format strings.
+    """
+    parser = configparser.ConfigParser(interpolation=None)
+    parser.read_string(ini_text)
+    for name in parser.sections():
+        if name.startswith("logger_") and parser[name].get("qualname") == "sqlalchemy.engine":
+            return logging.getLevelNamesMapping()[parser[name]["level"].strip().upper()]
+    raise AssertionError("no [logger_*] section with qualname = sqlalchemy.engine")
 
 
 def test_adr_0014_single_empty_baseline_head(alembic_config: Config) -> None:
@@ -68,3 +84,27 @@ def test_nfr_rel_04_online_mode_without_url_fails_before_connecting(
 
     with pytest.raises(ConfigError, match="DATABASE_URL_DIRECT"):
         command.current(alembic_config)
+
+
+SAMPLE_INI_INFO = """
+[logger_sqlalchemy]
+level = INFO
+handlers =
+qualname = sqlalchemy.engine
+"""
+
+
+def test_nfr_rel_04_engine_logger_level_helper_reads_the_level_by_qualname() -> None:
+    assert _engine_logger_level(SAMPLE_INI_INFO) == logging.INFO
+
+
+def test_nfr_rel_04_engine_logger_level_helper_fails_when_the_logger_is_missing() -> None:
+    with pytest.raises(AssertionError, match=re.escape("sqlalchemy.engine")):
+        _engine_logger_level("[logger_root]\nlevel = WARNING\nqualname =\n")
+
+
+def test_nfr_rel_04_sqlalchemy_engine_logger_is_warning_or_higher() -> None:
+    """INFO/DEBUG on sqlalchemy.engine logs every statement and can expose connection details."""
+    ini_text = (ROOT / "alembic.ini").read_text(encoding="utf-8")
+
+    assert _engine_logger_level(ini_text) >= logging.WARNING
