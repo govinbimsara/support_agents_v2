@@ -5,7 +5,7 @@ Guide to the `.claude/` setup, CLAUDE.md, hooks and CI trigger. (Moved here from
 ```
 CLAUDE.md                 Always-loaded project context (short on purpose; SDD 25.5)
 CONSTRAINTS.md            Quality bar skeleton, filled in by the /constraints interview
-.env.example              Variable names only. Real .env is git-ignored and denied to Claude
+.env.example              Variable names only. Maintained by the user; every .env* file, this one included, is denied to Claude
 .claude/
   settings.json           Permissions (deny .env etc.) + PreToolUse hook
   hooks/block_env_access.py   Blocks any tool call touching .env / dumping env
