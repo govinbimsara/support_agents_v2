@@ -1,6 +1,8 @@
 """Repo-wide secret hygiene checks (NFR-REL-04).
 
 These scan source text only. They never open env files.
+
+The hide_password scan is a tripwire for the literal text, not a complete check.
 """
 
 import re
