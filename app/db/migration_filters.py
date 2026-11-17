@@ -42,7 +42,7 @@ def _schema_of(obj: Any) -> str | None:
     """Schema of a table, or of the table that owns a column, index or constraint."""
     table = getattr(obj, "table", None)
     if table is not None:
-        return table.schema  # type: ignore[no-any-return]
+        return table.schema  # type: ignore[no-any-return]  # obj is Any, so table.schema is Any too
     return getattr(obj, "schema", None)
 
 
