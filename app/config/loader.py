@@ -210,7 +210,7 @@ def migration_url(settings: MigrationSettings) -> URL:
     Any driver suffix in the URL (e.g. ``postgresql+asyncpg://``) is rewritten to psycopg.
 
     The secret is unwrapped here and nowhere else. ``URL.__repr__``/``__str__`` mask the
-    password, but never call ``render_as_string(hide_password=False)`` on the result.
+    password, but never render the result to a string with the password shown.
     """
     return make_url(settings.database_url_direct.get_secret_value().strip()).set(
         drivername=MIGRATION_DRIVER
