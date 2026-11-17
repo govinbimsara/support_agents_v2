@@ -30,6 +30,10 @@ def _payload(tool: str, target: str) -> dict[str, Any]:
         tool_input = {"file_path": target, "old_string": "a", "new_string": "b"}
     elif tool == "Write":
         tool_input = {"file_path": target, "content": "x"}
+    elif tool == "Grep":
+        tool_input = {"pattern": "KEY", "path": target}
+    elif tool == "Glob":
+        tool_input = {"pattern": target}
     else:
         tool_input = {"command": f"cat {target}"}
     return {"tool_name": tool, "tool_input": tool_input}
@@ -45,7 +49,7 @@ def _run_hook(payload: dict[str, Any]) -> subprocess.CompletedProcess[str]:
     )
 
 
-@pytest.mark.parametrize("tool", ["Read", "Edit", "Write", "Bash"])
+@pytest.mark.parametrize("tool", ["Read", "Edit", "Write", "Bash", "Grep", "Glob"])
 @pytest.mark.parametrize("target", ENV_FILES)
 def test_secrets_policy_blocks_every_env_file_for_every_tool(tool: str, target: str) -> None:
     result = _run_hook(_payload(tool, target))
@@ -54,7 +58,7 @@ def test_secrets_policy_blocks_every_env_file_for_every_tool(tool: str, target: 
     assert "BLOCKED" in result.stderr
 
 
-@pytest.mark.parametrize("tool", ["Read", "Edit", "Write", "Bash"])
+@pytest.mark.parametrize("tool", ["Read", "Edit", "Write", "Bash", "Grep", "Glob"])
 @pytest.mark.parametrize("target", ORDINARY_FILES)
 def test_secrets_policy_allows_ordinary_files(tool: str, target: str) -> None:
     result = _run_hook(_payload(tool, target))
