@@ -19,7 +19,7 @@ chat API (FastAPI, Railway SG) | voice worker (ADK LiveKitRunner, LiveKit Cloud)
 - Check the SRS/SDD before inventing behaviour. Reference requirement IDs (FR-*, NFR-*, TC-*, GTS-*) in commits, PR titles and tests.
 
 ## SECURITY: secrets (hard rule)
-- NEVER read, print, grep, cat, or open `.env` or any `.env.*` file (only `.env.example` is allowed). Not to debug, not to "check a value".
+- NEVER read, print, grep, cat, edit or open any `.env*` file, `.env.example` included. Not to debug, not to "check a value". If a variable is needed, tell the user its name and what it is for; the user maintains the env files.
 - Never echo environment variables or print secrets. If a credential is missing or wrong, tell the user which variable name to fix and stop.
 - Never commit secrets. Config loads from environment; `.env` is git-ignored and denied in `.claude/settings.json`.
 
